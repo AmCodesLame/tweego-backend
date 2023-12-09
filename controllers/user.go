@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"backend/models"
+	"fmt"
+
 	// "encoding/json"
 
 	beego "github.com/beego/beego/v2/server/web"
@@ -25,7 +27,11 @@ func (u *UserController) Post() {
 
 func (u *UserController) GetById() {
 	id := u.GetString(":id")
-	Response := models.ReturnMsgParam(id)
-	u.Data["json"] = Response
-	u.ServeJSON()
+	Response, err := models.GetUserById(id)
+	if err != nil {
+		u.Ctx.WriteString(fmt.Sprintf("Error: %v", err.Error()))
+		return
+	}
+	u.Ctx.Output.Header("Content-Type", "application/json")
+	u.Ctx.Output.Body(Response)
 }

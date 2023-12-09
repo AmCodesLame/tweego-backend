@@ -1,10 +1,43 @@
 package models
 
 import (
-// "errors"
-// "strconv"
-// "time"
+	// "errors"
+	// "strconv"
+	// "time"
+	// "backend/models/types"
+	"backend/prisma/db"
+	"encoding/json"
+	"fmt"
 )
+
+// ///////////////////////
+func GetUserById(id string) (data []byte, err error) {
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	user, err := client.User.FindUnique(
+		db.User.Username.Equals(id),
+	).Exec(ctx)
+
+	if err != nil {
+		fmt.Printf("Error: %v\n", err.Error())
+		return nil, err
+	}
+
+	result, err := json.Marshal(user)
+
+	if err != nil {
+		fmt.Printf("Error in parsing JSON: %v", err.Error())
+		return nil, err
+	}
+	fmt.Printf("post: %s\n", result)
+	return result, nil
+}
+
+///////////////////////////
 
 // var (
 // 	UserList map[string]*User
