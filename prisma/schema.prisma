@@ -1,0 +1,36 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+ 
+generator db {
+  provider = "go run github.com/steebchen/prisma-client-go"
+}
+ 
+model User {
+  id        Int   @default(autoincrement()) @id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email String @unique
+  username String @unique
+  displayname String 
+  pfp String? 
+
+  tweets Tweet[]
+}
+
+model Tweet {
+    id Int @default(autoincrement()) @id
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    tweet String
+    image String?
+
+    userId Int 
+    user User @relation(fields: [userId], references: [id])
+
+}
