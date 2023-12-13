@@ -4,14 +4,19 @@ import (
 	// "errors"
 	// "strconv"
 	// "time"
-	// "backend/models/types"
+	"backend/models/types"
 	"backend/prisma/db"
 	"encoding/json"
 	"fmt"
+	"os"
+	"time"
+
+	jwt "github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ///////////////////////
-func GetUserById(id string) (data []byte, err error) {
+func GetUserByUsername(uname string) (data []byte, err error) {
 	client, ctx, err := db.Connect()
 	defer func() {
 		if err := client.Prisma.Disconnect(); err != nil {
@@ -19,8 +24,8 @@ func GetUserById(id string) (data []byte, err error) {
 		}
 	}()
 	user, err := client.User.FindUnique(
-		db.User.Username.Equals(id),
-	).Exec(ctx)
+		db.User.Username.Equals(uname),
+	).With(db.User.Tweets.Fetch()).Exec(ctx)
 
 	if err != nil {
 		fmt.Printf("Error: %v\n", err.Error())
@@ -33,8 +38,199 @@ func GetUserById(id string) (data []byte, err error) {
 		fmt.Printf("Error in parsing JSON: %v", err.Error())
 		return nil, err
 	}
-	fmt.Printf("post: %s\n", result)
+	fmt.Printf("user: %s\n", result)
 	return result, nil
+}
+
+func GetUserById(userid int) (data []byte, err error) {
+	username, err := GetUsernameByUserid(userid)
+	if err != nil {
+		return nil, err
+	}
+	return GetUserByUsername(username)
+}
+
+func CreateUser(user types.UserType) (string, error) {
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	encPass, err := bcrypt.GenerateFromPassword([]byte(user.Password), 10)
+	createdPost, err := client.User.CreateOne(
+		db.User.Email.Set(user.Email),
+		db.User.Username.Set(user.Username),
+		db.User.Password.Set(encPass),
+		db.User.Displayname.Set(user.Displayname),
+		db.User.Bio.Set(user.Bio),
+		db.User.Pfp.Set(user.PFP),
+	).Exec(ctx)
+	if err != nil {
+		return "", err
+	}
+	claims := jwt.MapClaims{
+		"username": user.Username,
+		"IssuedAt": time.Now().UTC().Unix(),
+	}
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := jwtToken.SignedString([]byte(os.Getenv("HMACKEY")))
+	if err != nil {
+		fmt.Println("we got an", err)
+	}
+
+	result, _ := json.MarshalIndent(createdPost, "", "  ")
+	fmt.Printf("created user: %s\n", result)
+	fmt.Printf("raw jwt  user: %v\n", jwtToken.Valid)
+	fmt.Printf("raw jwt  sgi: %v\n", jwtToken.Signature)
+	return tokenString, nil
+}
+
+func UpdateUser(user types.UpdateUserType) error {
+
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	userDb, err := client.User.FindUnique(
+		db.User.Username.Equals(user.Username),
+	).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	val, ok := userDb.Bio()
+	if ok != false {
+		fmt.Println("userDb bio", val)
+	}
+
+	if err := bcrypt.CompareHashAndPassword(userDb.Password, []byte(user.Password)); err != nil {
+		return err
+	}
+	if user.NewPassword != "" {
+		encPass, err := bcrypt.GenerateFromPassword([]byte(user.NewPassword), 10)
+		if err != nil {
+			return err
+		}
+		_, err = client.User.FindUnique(
+			db.User.Username.Equals(user.Username),
+		).Update(
+			db.User.Password.Set(encPass),
+			db.User.Displayname.Set(user.Displayname),
+			db.User.Bio.Set(user.Bio),
+			db.User.Pfp.Set(user.PFP),
+		).Exec(ctx)
+		return nil
+	}
+
+	_, err = client.User.FindUnique(
+		db.User.Username.Equals(user.Username),
+	).Update(
+		db.User.Displayname.Set(user.Displayname),
+		db.User.Bio.Set(user.Bio),
+		db.User.Pfp.Set(user.PFP),
+	).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteUser(user types.UserType) error {
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+
+	userDb, err := client.User.FindUnique(
+		db.User.Username.Equals(user.Username),
+	).Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword(userDb.Password, []byte(user.Password)); err != nil {
+		return err
+	}
+
+	_, err = client.User.FindUnique(
+		db.User.Username.Equals(user.Username),
+	).Delete().Exec(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetUserList() (data []byte, err error) {
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	user, err := client.User.FindMany().Exec(ctx)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err.Error())
+		return nil, err
+	}
+	var ResponseArray []json.RawMessage
+	for _, val := range user {
+		Response, err := json.Marshal(val)
+		if err != nil {
+			fmt.Printf("Error in parsing JSON: %v", err.Error())
+			return nil, err
+		}
+		ResponseArray = append(ResponseArray, json.RawMessage(Response))
+	}
+	response, err := json.Marshal(ResponseArray)
+	return response, nil
+
+}
+
+func GetUserIdByUname(uname string) (int, error) {
+	if uname == "" {
+		return 0, fmt.Errorf("Username not provided")
+	}
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	user, err := client.User.FindUnique(
+		db.User.Username.Equals(uname),
+	).Exec(ctx)
+
+	if err != nil {
+		fmt.Printf("Error: %v\n", err.Error())
+		return 0, err
+	}
+	return user.ID, nil
+}
+
+func GetUsernameByUserid(userid int) (string, error) {
+	if userid == 0 {
+		return "", fmt.Errorf("UserId not provided")
+	}
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	user, err := client.User.FindUnique(
+		db.User.ID.Equals(userid),
+	).Exec(ctx)
+
+	if err != nil {
+		fmt.Printf("Error: %v\n", err.Error())
+		return "", fmt.Errorf("Username not found by UserID")
+	}
+	return user.Username, nil
 }
 
 ///////////////////////////

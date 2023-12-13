@@ -15,8 +15,10 @@ model User {
 
   email String @unique
   username String @unique
+  password Bytes
   displayname String 
   pfp String? 
+  bio String?
 
   tweets Tweet[]
 }

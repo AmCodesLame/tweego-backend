@@ -6,29 +6,41 @@ import (
 )
 
 type UserType struct {
-	id int
+	ID int `json:"id"`
 
-	createdAt time.Time
-	updatedAt time.Time
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
-	email       string
-	username    string
-	displayname string
-	pfp         string
-	tweets      []TweetType
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	Username    string `json:"username"`
+	Displayname string `json:"displayname"`
+	PFP         string `json:"pfp"`
+	Bio         string `json:"bio"`
+
+	Tweets []TweetType `json:"tweets"`
+}
+
+type UpdateUserType struct {
+	Password    string `json:"password"`
+	NewPassword string `json:"newpassword"`
+	Username    string `json:"username"`
+	Displayname string `json:"displayname"`
+	PFP         string `json:"pfp"`
+	Bio         string `json:"bio"`
 }
 
 type TweetType struct {
-	id int
+	ID int `json:"id"`
 
-	createdAt time.Time
-	updatedAt time.Time
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
-	tweet string
-	image string
+	Tweet string `json:"tweet"`
+	Image string `json:"image"`
 
-	userId int
-	user   UserType
+	UserID int      `json:"user_id"`
+	User   UserType `json:"user"`
 }
 
 func (u *UserType) puts(data *db.UserModel) {
