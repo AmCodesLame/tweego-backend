@@ -3,6 +3,8 @@ package types
 import (
 	"backend/prisma/db"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type UserType struct {
@@ -45,4 +47,10 @@ type TweetType struct {
 
 func (u *UserType) puts(data *db.UserModel) {
 
+}
+
+type JWTClaim struct {
+	Username string `json:"username"`
+	UserId   int    `json:"user_id`
+	jwt.RegisteredClaims
 }

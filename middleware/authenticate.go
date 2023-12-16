@@ -12,6 +12,11 @@ import (
 func Authenticate(ctx *beecontext.Context) {
 	// cookieToken := ctx.GetCookie("bearer")
 	authorizationHeader := ctx.Input.Header("Authorization")
+	if authorizationHeader == "" {
+		ctx.Output.SetStatus(401)
+		_ = ctx.Output.Body([]byte("Unauthorized\n"))
+		return
+	}
 	token1 := strings.Split(authorizationHeader, " ")[1]
 	fmt.Println(token1)
 	// cookieToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJJc3N1ZWRBdCI6MTcwMjQ3ODkyNSwidGVzdCI6InRoaXMgaXMgYSB0ZXN0In0.hWOIrg8hnKJ7-244nXOG5Rg0lFwDpf8ygFCduWx50Mc"
@@ -19,7 +24,7 @@ func Authenticate(ctx *beecontext.Context) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(os.Getenv("HMACKEY")), nil
+		return []byte([]byte(os.Getenv("HMACKEY"))), nil
 	})
 	if err != nil {
 		ctx.Output.SetStatus(401)

@@ -15,7 +15,42 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+////////////////////////////
+
 // ///////////////////////
+
+func LoginUser(user types.UserType) (string, error) {
+	client, ctx, err := db.Connect()
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			panic(err)
+		}
+	}()
+	userDb, err := client.User.FindUnique(
+		db.User.Username.Equals(user.Username),
+	).Exec(ctx)
+	if err != nil {
+		return "", fmt.Errorf("User Not Found, {%v}", err.Error())
+	}
+	if err := bcrypt.CompareHashAndPassword(userDb.Password, []byte(user.Password)); err != nil {
+		return "", fmt.Errorf("Password Incorrect! {%v}", err.Error())
+	}
+	claims := jwt.MapClaims{
+		"username":  user.Username,
+		"id":        userDb.ID,
+		"IssuedAt":  time.Now().UTC().Unix(),
+		"ExpiresAt": time.Now().Add(time.Hour * 24).Unix(),
+		"Issuer":    "tweego",
+	}
+
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := jwtToken.SignedString([]byte(os.Getenv("HMACKEY")))
+	if err != nil {
+		fmt.Println("Error In JWT Signing", err)
+	}
+	return tokenString, nil
+}
+
 func GetUserByUsername(uname string) (data []byte, err error) {
 	client, ctx, err := db.Connect()
 	defer func() {
@@ -70,19 +105,21 @@ func CreateUser(user types.UserType) (string, error) {
 		return "", err
 	}
 	claims := jwt.MapClaims{
-		"username": user.Username,
-		"IssuedAt": time.Now().UTC().Unix(),
+		"username":  user.Username,
+		"id":        &createdPost.ID,
+		"IssuedAt":  time.Now().UTC().Unix(),
+		"ExpiresAt": time.Now().Add(time.Hour * 24).Unix(),
+		"Issuer":    "tweego",
 	}
+
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := jwtToken.SignedString([]byte(os.Getenv("HMACKEY")))
 	if err != nil {
-		fmt.Println("we got an", err)
+		fmt.Println("Error In JWT Signing", err)
 	}
 
 	result, _ := json.MarshalIndent(createdPost, "", "  ")
 	fmt.Printf("created user: %s\n", result)
-	fmt.Printf("raw jwt  user: %v\n", jwtToken.Valid)
-	fmt.Printf("raw jwt  sgi: %v\n", jwtToken.Signature)
 	return tokenString, nil
 }
 
@@ -98,15 +135,11 @@ func UpdateUser(user types.UpdateUserType) error {
 		db.User.Username.Equals(user.Username),
 	).Exec(ctx)
 	if err != nil {
-		return err
-	}
-	val, ok := userDb.Bio()
-	if ok != false {
-		fmt.Println("userDb bio", val)
+		return fmt.Errorf("User Not Found, {%v}", err.Error())
 	}
 
 	if err := bcrypt.CompareHashAndPassword(userDb.Password, []byte(user.Password)); err != nil {
-		return err
+		return fmt.Errorf("Password Incorrect! {%v}", err.Error())
 	}
 	if user.NewPassword != "" {
 		encPass, err := bcrypt.GenerateFromPassword([]byte(user.NewPassword), 10)

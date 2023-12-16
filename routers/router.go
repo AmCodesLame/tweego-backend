@@ -18,7 +18,8 @@ func init() {
 	beego.InsertFilter("/user/*", beego.BeforeRouter, middleware.Authenticate)
 	beego.InsertFilter("/tweet/*", beego.BeforeRouter, middleware.Authenticate)
 	authNS := beego.NewNamespace("/auth",
-		beego.NSRouter("/register", &controllers.NewuserController{}, "post:RegisterUserPlease"),
+		beego.NSRouter("/register", &controllers.AuthController{}, "post:RegisterUser"),
+		beego.NSRouter("/login", &controllers.AuthController{}, "post:LoginUser"),
 	)
 
 	userNS := beego.NewNamespace("/user",
